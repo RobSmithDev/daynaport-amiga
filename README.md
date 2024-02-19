@@ -26,11 +26,11 @@ scsidayna.prefs contains an example config file for the device. This needs to be
 The format of that file is:
 scsi-device-driver-name.device
 `
-	deviceID  (0-7) or -1 for auto-detect
-	40		(device delay time when idle)
-	1		(task priority, -128-127)
-	1		(1/0 for auto connect to WIFI - you can configure this in the bluescsi.ini file too)
-	ssid	(wifi SSID)
-	pwd		(wifi password)
+-	deviceID  (0-7) or -1 for auto-detect
+-	40		(device delay time when idle)
+-	1		(task priority, -128-127)
+-	1		(1/0 for auto connect to WIFI - you can configure this in the bluescsi.ini file too)
+-	ssid	(wifi SSID)
+-	pwd		(wifi password)
 `
 
