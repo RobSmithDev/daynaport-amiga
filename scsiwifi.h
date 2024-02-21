@@ -55,25 +55,24 @@ struct STRUCT_PACKED SCSIWifi_JoinRequest {
 
 // A single result received from a WIFI scan
 struct STRUCT_PACKED SCSIWifi_NetworkEntry {
-	char ssid[64];
-	char bssid[6];
-	char rssi;
+	char ssid[64]; 
+	char bssid[6]; // Not implemented with getting current wifi status
+	char rssi;     // if this is 0 its not connected
 	UBYTE channel;
 	UBYTE flags;
 	UBYTE _padding;
 };
 
 // Disk settings
-struct STRUCT_PACKED ScsiDaynaSettings {
+struct ScsiDaynaSettings {
   // SCSI device driver
   char deviceName[108];
-  // Device index  
-  SHORT deviceIndex;     // if this is <0 or >7 then it auto-detects
-  // Time delay (in milliseconds) for a poll for new packets when the last read said it had no more - affects latency/ping time
-  USHORT pollDelay;
+  // Device ID  
+  SHORT deviceID;     // if this is <0 or >7 then it auto-detects
   // Priority for the READING task
   SHORT taskPriority;
-
+  // Driver mode
+  USHORT scsiMode;
   // Auto-connect to this wifi network
   USHORT autoConnect;
   char ssid[64];
@@ -104,15 +103,17 @@ struct SCSIDevice_OpenData {
     struct UtilityBase *utilityBase;
     struct DosBase *dosBase;
 
+    SHORT deviceID;                     // SCSI ID (0-7)
+    USHORT scsiMode;                  // Special mode, from settings
+
     char* deviceDriverName;             // SCSI Driver to use (eg: scsi.device or gvpscsi.device etc)
-    USHORT deviceID;                    // SCSI ID (0-7)
 };
 
 // Populates settings with default values
 void SCSIWifi_defaultSettings(struct ScsiDaynaSettings* settings);
 
 // Loads settings from the ENV, returns 0 if the settings were bad and defaults were setup
-LONG SCSIWifi_loadSettings(struct DosBase *dosBase, struct ScsiDaynaSettings* settings);
+LONG SCSIWifi_loadSettings(void *utilityBase, void *dosBase, struct ScsiDaynaSettings* settings);
 
 // Saves settings back to ENV or ENVARC - returns 0 if it failed
 LONG SCSIWifi_saveSettings(struct DosBase *dosBase, struct ScsiDaynaSettings* settings, LONG saveToENV);

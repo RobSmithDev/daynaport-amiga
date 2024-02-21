@@ -34,47 +34,13 @@
 #define SCSI_NETWORK_WIFI_OPT_SCAN_RESULTS	0x03
 #define SCSI_NETWORK_WIFI_OPT_INFO			0x04
 #define SCSI_NETWORK_WIFI_OPT_JOIN			0x05
+#define SCSI_NETWORK_WIFI_OPT_ALTREAD       0x08    
 #define SCSI_NETWORK_WIFI_OPT_GETMACADDRESS 0x09    
 
 #define INQUIRE_BUFFER_SIZE                 64
 
-// SENSE 
-#define SCSI_CHECK_CONDITION                2
-
-#ifdef __VBCC__
-#pragma pack(2)
-struct SENSE_DATA {
-  UBYTE  ValidErrorCode;      
-  UBYTE  SegmentNumber;
-  UBYTE  SenseKeyAndFlags;
-  UBYTE  Information[4];
-  UBYTE  AdditionalSenseLength;
-  UBYTE  CommandSpecificInformation[4];
-  UBYTE  AdditionalSenseCode;
-  UBYTE  AdditionalSenseCodeQualifier;
-  UBYTE  FieldReplaceableUnitCode;
-  UBYTE  SenseKeySpecific[3];
-};
-#pragma pack()
-#else
-struct STRUCT_ALIGN16 SENSE_DATA {
-  UBYTE  ErrorCode  :7;
-  UBYTE  Valid  :1;
-  UBYTE  SegmentNumber;
-  UBYTE  SenseKey  :4;
-  UBYTE  Reserved  :1;
-  UBYTE  IncorrectLength  :1;
-  UBYTE  EndOfMedia  :1;
-  UBYTE  FileMark  :1;
-  UBYTE  Information[4];
-  UBYTE  AdditionalSenseLength;
-  UBYTE  CommandSpecificInformation[4];
-  UBYTE  AdditionalSenseCode;
-  UBYTE  AdditionalSenseCodeQualifier;
-  UBYTE  FieldReplaceableUnitCode;
-  UBYTE  SenseKeySpecific[3];
-};
-#endif
+#define NUM_TOKENS 7
+static char* CONFIG_TOKENS[NUM_TOKENS] = {"DEVICE","DEVICEID","PRIORITY","MODE","AUTOCONNECT","SSID","KEY"};
 
 // Prepares the SCSI command and resets some of the result values
 #define SCSI_PREPCMD(device, cmd, sub, a, b, c, d) \
@@ -89,18 +55,17 @@ struct SCSIDevice {
     struct ExecBase *sc_SysBase;
     struct UtilityBase *sc_UtilityBase;
     struct DosBase *sc_dosBase;
-
     struct IOStdReq* SCSIReq;
     struct MsgPort* Port;    
     struct SCSICmd Cmd;
-    struct SENSE_DATA senseData;
+    char senseData[20];
+    USHORT scsiMode;
     UBYTE* scsiCommand;    // buffer to hold command, 16-bit aligned (12 bytes)
 };
 
 #define SysBase dev->sc_SysBase
 #define UtilityBase dev->sc_UtilityBase
 #define DOSBase dev->sc_dosBase
-
 
 typedef struct SCSIDevice* LSCSIDevice;
 
@@ -116,7 +81,7 @@ void muldiv(USHORT num, USHORT divide, USHORT* result, USHORT* mod) {
 }
 
 // convert USHORT to string and appends a new line character
-void _ustoa_nl(USHORT num, char* str) {
+void _ustoa(USHORT num, char* str) {
     char buffer[16];
     char* s = buffer;
     USHORT divres, divmod;
@@ -128,12 +93,11 @@ void _ustoa_nl(USHORT num, char* str) {
     s--;
 
     while (s>=buffer) *str++ = *s--;        
-    *str++ = '\n';
     *str++ = '\0';
 }
 
 // convert SHORT to string and appends a new line character
-void _stoa_nl(SHORT num, char* str) {
+void _stoa(SHORT num, char* str) {
     char buffer[16];
     char* s = buffer;
     USHORT divres, divmod, number;
@@ -150,7 +114,6 @@ void _stoa_nl(SHORT num, char* str) {
     if (neg) *str++ = '-';
 
     while (s>=buffer) *str++ = *s--;        
-    *str++ = '\n';
     *str++ = '\0';
 }
 
@@ -182,16 +145,28 @@ SHORT _atos(char* str) {
     return out;
 }
 
-// Populates settings with default values
-void SCSIWifi_defaultSettings(struct ScsiDaynaSettings* settings) {
-    strcpy(settings->deviceName, "scsi.device");
-    settings->deviceIndex = -1;  // auto detect
-    settings->pollDelay = 10;    // controls the pause when idle.  Uses the VBLANK timer, weirdly doesnt have that much effect 
-    settings->taskPriority = 1;  // -128 to 127
+// Looks at data, which should be TOKEN=VALUE format.
+// If valid then the value will be populated to the first character after the "=" symbol
+// Returns 0 if the line is invalid
+LONG tokeniseSetting(char* data, char** value) {
+    *value = NULL;
+    while (*data) {
+        if (*data == '=') {
+            *data = '\0';
+            *value = data+1;
+            return 1;
+        } 
+        data++;
+    }
+    return 0;
+}
 
-    settings->autoConnect = 0;   // auto connect to the WIFI?
-    strcpy(settings->ssid, "");
-    strcpy(settings->key, "");
+// Safe (I hope ;) implementation to prevent buffer overflows
+void strcpy_s(char* dest, char* src, USHORT maxLength) {
+    USHORT i = strlen(src);
+    if (i>=maxLength) i = maxLength;
+    memcpy(dest, src, i-1);
+    dest[i-1] = '\0';
 }
 
 // Rmeoves any trailing newline characters
@@ -205,30 +180,66 @@ void removeNL(char* text) {
     }
 }
 
+// Populates settings with default values
+void SCSIWifi_defaultSettings(struct ScsiDaynaSettings* settings) {
+    strcpy(settings->deviceName, "scsi.device");
+    settings->deviceID = -1;  // auto detect
+    settings->taskPriority = 0;  // -128 to 127  - probably should be 0 but works faster set as 1!
+    settings->scsiMode = 1;      // Driver mode. 0=DynaPORT, 1=24 Byte Patch (scsi.device), 2=Single Write Mode (gvpscsi.device)
+    settings->autoConnect = 0;   // auto connect to the WIFI?
+    strcpy(settings->ssid, "");
+    strcpy(settings->key, "");
+}
+
 // Loads settings from the ENV, returns 0 if the settings were bad and defaults were setup
-LONG SCSIWifi_loadSettings(struct DosBase *dosBase, struct ScsiDaynaSettings* settings) {
+LONG SCSIWifi_loadSettings(void *utilityBase, void* dosBase, struct ScsiDaynaSettings* settings) {
     struct SCSIDevice devTmp;
     LSCSIDevice dev = &devTmp;
     devTmp.sc_dosBase = dosBase;
+    devTmp.sc_UtilityBase = utilityBase;
 
+    USHORT modeConfigured = 0;
     SCSIWifi_defaultSettings(settings);
     BPTR fh;
     if (fh = Open("ENV:scsidayna.prefs",MODE_OLDFILE)) {
-        UBYTE good = 1;
-        if (!FGets(fh, settings->deviceName, 108)) good = 0; else removeNL(settings->deviceName);
-        char tmp[20];
-        if (FGets(fh, tmp, 20)) settings->deviceIndex = _atos(tmp); else good = 0;
-        if (FGets(fh, tmp, 20)) settings->pollDelay = _atous(tmp); else good = 0;
-        if (FGets(fh, tmp, 20)) settings->taskPriority = _atos(tmp); else good = 0;
-        if (settings->taskPriority>127) settings->taskPriority = 127;
-        if (settings->taskPriority<-128) settings->taskPriority = -128;
-        if (FGets(fh, tmp, 20)) settings->autoConnect = _atous(tmp); else good = 0;
-        if (!FGets(fh, settings->ssid, 64)) good = 0; else removeNL(settings->ssid);
-        if (!FGets(fh, settings->key, 64)) good = 0; else removeNL(settings->key);
-
-        if (!good) SCSIWifi_defaultSettings(settings);
+        char buffer[128];
+        USHORT matches = 0;
+        while (FGets(fh, buffer, 128)) {
+            char* value;
+            if (tokeniseSetting(buffer, &value)) {
+                // find a match
+                for (USHORT token = 0; token < NUM_TOKENS; token++) {
+                    matches++;
+                    if (Stricmp(CONFIG_TOKENS[token], buffer) == 0) {
+                        switch (token) {
+                            case 0: strcpy_s(settings->deviceName, value, 108); break;
+                            case 1: settings->deviceID = _atos(value); break;
+                            case 2: settings->taskPriority = _atos(value); 
+                                    if (settings->taskPriority>127) settings->taskPriority = 127;
+                                    if (settings->taskPriority<-128) settings->taskPriority = -128;
+                                    break;
+                            case 3: settings->scsiMode = _atous(value); 
+                                    if (settings->scsiMode>2) settings->scsiMode=2;
+                                    modeConfigured = 1;
+                                    break;
+                            case 4: settings->autoConnect = _atous(value); break;
+                            case 5: strcpy_s(settings->ssid, value, 64); break;
+                            case 6: strcpy_s(settings->key, value, 64); break;
+                            default: matches--; break;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        if (matches < 1) SCSIWifi_defaultSettings(settings);
         Close(fh);
-        return good;
+        return matches > 0;
+    }
+
+    // If no mode was set, but a GVP device was specified then jump to mode 2. It will default to 1 anyway
+    if (!modeConfigured) {
+        if ((ToUpper(settings->deviceName[0]) == 'G') && (ToUpper(settings->deviceName[0]) == 'V') && (ToUpper(settings->deviceName[0]) == 'P')) settings->scsiMode = 2;
     }
 
     return 0;
@@ -241,21 +252,23 @@ LONG SCSIWifi_saveSettings(struct DosBase *dosBase, struct ScsiDaynaSettings* se
     devTmp.sc_dosBase = dosBase;
     BPTR fh;
     if (fh = Open(saveToENV ? "ENV:scsidayna.prefs" : "ENVARC:scsidayna.prefs",MODE_NEWFILE)) {
-        UBYTE good = 1;
-        struct ScsiDaynaSettings tmp = *settings;
-        strcat(tmp.deviceName, "\n");
-        strcat(tmp.ssid, "\n");
-        strcat(tmp.key, "\n");
-        
-        if (!FPuts(fh, tmp.deviceName)) good = 0;
-        char str[20];
-        _stoa_nl(tmp.deviceIndex, str);  if (!FPuts(fh, str)) good = 0;
-        _ustoa_nl(tmp.pollDelay, str);  if (!FPuts(fh, str)) good = 0;
-        _stoa_nl(tmp.taskPriority, str);  if (!FPuts(fh, str)) good = 0;
-        _ustoa_nl(tmp.autoConnect, str);  if (!FPuts(fh, str)) good = 0;
-
-        if (!FPuts(fh, tmp.ssid)) good = 0;
-        if (!FPuts(fh, tmp.key)) good = 0;
+        // Save each setting in tern
+        USHORT good = 1;
+        char tmp[20];  // temp buffer
+        for (USHORT token = 0; token < NUM_TOKENS; token++) {
+            if (!FPuts(fh, CONFIG_TOKENS[token])) good = 0;
+            if (!FPuts(fh, "=")) good = 0;
+            switch (token) {
+                case 0:  if (!FPuts(fh, settings->deviceName)) good = 0; break;
+                case 1:  _stoa(settings->deviceID, tmp);  if (!FPuts(fh, tmp)) good = 0; break;
+                case 2:  _stoa(settings->taskPriority, tmp);  if (!FPuts(fh, tmp)) good = 0; break;
+                case 3:  _ustoa(settings->scsiMode, tmp);  if (!FPuts(fh, tmp)) good = 0; break;
+                case 4:  _ustoa(settings->autoConnect, tmp);  if (!FPuts(fh, tmp)) good = 0; break;
+                case 5:  if (!FPuts(fh, settings->ssid)) good = 0; break;
+                case 6:  if (!FPuts(fh, settings->key)) good = 0; break;
+            }
+            if (!FPuts(fh, "\n")) good = 0;
+        }
 
         Close(fh);
         return good;
@@ -382,6 +395,8 @@ SCSIWIFIDevice SCSIWifi_open(struct SCSIDevice_OpenData* openData, enum SCSIWifi
             _SCSIWifi_close(dev);
             return NULL;
         }
+        dev->scsiMode = openData->scsiMode;
+
         // Setup the SCSI command structure    
         dev->SCSIReq->io_Length  = sizeof(struct SCSICmd);
         dev->SCSIReq->io_Data    = (APTR)&dev->Cmd;
@@ -390,7 +405,7 @@ SCSIWIFIDevice SCSIWifi_open(struct SCSIDevice_OpenData* openData, enum SCSIWifi
         dev->Cmd.scsi_CmdLength = 6;  
         dev->Cmd.scsi_Command   = dev->scsiCommand;                  
         dev->Cmd.scsi_SenseData = (UBYTE*)&dev->senseData;     
-        dev->Cmd.scsi_SenseLength = sizeof(dev->senseData);              
+        dev->Cmd.scsi_SenseLength = 20;              
 
         UBYTE* tmpBuffer = AllocVec(INQUIRE_BUFFER_SIZE+16, MEMF_PUBLIC);
         if (!tmpBuffer) {
@@ -403,7 +418,8 @@ SCSIWIFIDevice SCSIWifi_open(struct SCSIDevice_OpenData* openData, enum SCSIWifi
         dev->Cmd.scsi_Length = INQUIRE_BUFFER_SIZE;        
         dev->Cmd.scsi_Flags = SCSIF_READ | SCSIF_AUTOSENSE;
 
-        DoIO( (struct IORequest*)dev->SCSIReq );   
+        DoIO( (struct IORequest*)dev->SCSIReq );  
+
         // Failed
         if (dev->Cmd.scsi_Status) {
             *errorCode = sworInquireFail;
@@ -639,7 +655,7 @@ LONG SCSIWifi_addMulticastAddress(SCSIWIFIDevice device, struct SCSIWifi_MACAddr
 // Send an ethernet frame (this is actually queued and sent inside the bluescsi/scsi2sd)
 LONG SCSIWifi_sendFrame(SCSIWIFIDevice device, UBYTE* packet, UWORD packetSize) {
     LSCSIDevice dev = (LSCSIDevice)device;
-
+    
     SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_WRITEFRAME, 0, 0, packetSize >> 8, packetSize & 0xFF, 0);
     dev->Cmd.scsi_Data = (APTR)packet;
     dev->Cmd.scsi_Length = packetSize;
@@ -647,10 +663,8 @@ LONG SCSIWifi_sendFrame(SCSIWIFIDevice device, UBYTE* packet, UWORD packetSize) 
 
     DoIO( (struct IORequest*)dev->SCSIReq );     
 
-    LONG ret = 1;
-    if (dev->Cmd.scsi_Status) ret = 0;
-
-    return ret;
+    if (dev->Cmd.scsi_Status) return 0;
+    return 1;
 }
 
 
@@ -664,29 +678,32 @@ LONG SCSIWifi_sendFrame(SCSIWIFIDevice device, UBYTE* packet, UWORD packetSize) 
 //           2: 0xF8 - magic number. If its NOT this then the device is NOT running the right firmware
 //           3, 4 = 0
 //           5: 0 if this was the last packet, or 0x10 if there are more to read
-//      last 4 bytes are the CRC for the packet
+//      last 4 bytes are the CRC for the packet which we dont care about!
 LONG SCSIWifi_receiveFrame(SCSIWIFIDevice device, UBYTE* packetBuffer, UWORD* packetSize) {
     LSCSIDevice dev = (LSCSIDevice)device;
 
-    SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_READFRAME, 0, 0xF8, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
+   switch (dev->scsiMode) {
+       case 1:  // scsi.device mode
+            SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_READFRAME, 0,  0xF8, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
+            break;
 
+        case 2:  // gvpscsi.device mode
+            SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_CMD, SCSI_NETWORK_WIFI_OPT_ALTREAD,  0xF9, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
+            break;
+
+        default:
+            SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_READFRAME, 0, 0, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
+            break;
+    }
     dev->Cmd.scsi_Data = (APTR)packetBuffer;
     dev->Cmd.scsi_Length = *packetSize;
     dev->Cmd.scsi_Flags = SCSIF_READ | SCSIF_AUTOSENSE;
 
-#ifdef DEBUG
-    //for (int a=0; a<*packetSize; a++) packetBuffer[a] = (a) & 0xFF;
-#endif 
-
     DoIO( (struct IORequest*)dev->SCSIReq ); 
 
-    LONG ret = 1;
-    if ((dev->Cmd.scsi_Status) || (dev->Cmd.scsi_Actual < 6)) ret = 0;
+    if ((dev->Cmd.scsi_Status) || (dev->Cmd.scsi_Actual < 6)) return 0;
 
-#ifdef DEBUG
-    if (packetBuffer[2] != 0xF8) D(("WARNING: Scsi device is running old firmware"));
-#endif    
     *packetSize = dev->Cmd.scsi_Actual;
 
-    return ret;
+    return 1;
 }

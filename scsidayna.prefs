@@ -1,7 +1,8 @@
-scsi.device
-4
-40
-0
-1
-ssid
-password
+DEVICE=scsi.device
+DEVICEID=-1
+PRIORITY=0
+MODE=2
+AUTOCONNECT=0
+SSID=
+KEY=
+

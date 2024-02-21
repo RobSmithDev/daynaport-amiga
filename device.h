@@ -60,10 +60,12 @@ struct devbase {
 	struct Sana2DeviceStats db_DevStats;
 
 	volatile USHORT db_online;
+	volatile USHORT db_currentWifiState;   // the *actual* online state
 
     // SCSI device (in the main task)
 	void* db_scsiSettings;    // A pointer to a ScsiDaynaSettings struct  
 	USHORT db_scsiDeviceID;	  // The device ID that should be used going forward (auto-detect)
+	USHORT db_scsiMode;       // Scsi mode
 	struct List db_ReadList;
 	struct SignalSemaphore db_ReadListSem;
 	struct List db_WriteList;

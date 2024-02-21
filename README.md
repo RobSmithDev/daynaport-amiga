@@ -1,4 +1,6 @@
 # DaynaPORT Driver for BlueSCSI (Amiga)
+Created by RobSmithDev
+Based on the MNT ZZ9000 Network Driver by Lukas F. Hartmann and uses bits I learnt from reading how PlipBox works.
 
 This is an implementation of a SANA-II driver for the Amiga, that will use the BlueScsi V2 WIFI version to give internet access to the machine!
 This code is based on the MNT ZZ9000Net driver by Lukas F. Hartmann (which is based on work by Henryk Richter) and also borrows a little from the PlipBox device by, 
@@ -6,31 +8,56 @@ well, theres several people.
 
 This requires the updates in https://github.com/RobSmithDev/BlueSCSI-v2 in order to work.
 
-I've tested it with the following setup:
--	Amiga 500+ (2M Chip)
+I've tested it with the following setups:
+### Amiga 500+ (2M Chip)
 -	A590 HDD (2M fast ram, 7.0 ROM) 
 -	Blue Scsi V2 Wifi version
 -	Kickstart 3.2
 	
-I've tried it on this configuration and it *sometimes* works but most of the time doesnt.
-I think it just doesnt manage to get a DHCP lease in time and gives up. Sometimes you get GVP errors
--	Amiga 2000 (2M Chip)
+### Amiga 2000 (2M Chip)
 -	Impact A2000-HC+8 Series II (8M Fast Ram) 
 -	Blue Scsi V2 Wifi version
 -	Kickstart 3.1
 	
-Side effects: the hdd light constantly flashes while the driver is in use.
+#### Side effects
+The hdd light constantly flashes while the driver is in use.
 The driver needs to be copied to the Devs:Networks folder and then setup your TCP/IP stack as normal.
 
+### Config File (IMPORTANT)
 scsidayna.prefs contains an example config file for the device. This needs to be copied to ENVARC on the Amiga and rebooted
 The format of that file is:
+
+DEVICE=scsi.device\
+DEVICEID=-1\
+PRIORITY=0\
+MODE=1\
+AUTOCONNECT=0\
+SSID=\
+KEY=\
+
+where:
+- DEVICE is the name of the SCSI driver, eg: scsi.device or gvpscsi.device
+- DEVICEID is the SCSI device index the DaynaPORT is on, or -1 for Auto Detect
+- PRIORITY -128 to 127, sets the I/O task priority, see below
+- MODE see below
+- AUTOCONNECT 0/1 if 1, the driver will attempt to connect to the WIFI device (you can configure BlueSCSI to do this)
+- SSID The SSID/Wifi name to connect to if autoconnect=1
+- KEY the wifi key/password
+
 scsi-device-driver-name.device
-`
 -	deviceID  (0-7) or -1 for auto-detect
 -	40		(device delay time when idle)
--	1		(task priority, -128-127)
+-	0		(task priority, -128 to 127 - see below)
 -	1		(1/0 for auto connect to WIFI - you can configure this in the bluescsi.ini file too)
 -	ssid	(wifi SSID)
 -	pwd		(wifi password)
-`
 
+## Mode
+This patches around weirdness in the various SCSI drivers. Mode should be:
+- 0: This runs in normal mode
+- 1: Runs in 24-byte pad mode (required for scsi.device - A590/A2091)
+- 2: Runs in 'single transfer' mode (required for gvpscsi.device)
+
+## Task Priority
+A small note about task priority. If left at 0 the device will function perfectly fine, however the throughput of data is somewhat all over the place.
+If you want a really stable throughput, then set this to '1', but also expect this will possibly slow down some of the other applications running on your system.

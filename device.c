@@ -26,6 +26,7 @@
 #include <clib/exec_protos.h>
 #include <clib/alib_protos.h>
 #include <devices/timer.h>
+#include <proto/timer.h>
 #include <exec/types.h>
 #include <dos/dostags.h>
 #include <exec/ports.h>
@@ -132,7 +133,7 @@ __saveds struct Device *DevInit( ASMR(d0) DEVBASEP                  ASMREG(d0),
   }
   struct ScsiDaynaSettings* settings = (struct ScsiDaynaSettings*)db->db_scsiSettings;
  
-  if (SCSIWifi_loadSettings((void*)DOSBase, settings))
+  if (SCSIWifi_loadSettings((void*)UtilityBase, (void*)DOSBase, settings))
     D(("scsidayna: settings loaded")); else D(("scsidayna: Invalid or missing settings file, reverting to defaults\n"));
 
   if (strlen(settings->deviceName)<1) {
@@ -146,13 +147,15 @@ __saveds struct Device *DevInit( ASMR(d0) DEVBASEP                  ASMREG(d0),
   openData.utilityBase = (void*)UtilityBase;
   openData.dosBase = (void*)DOSBase;
   openData.deviceDriverName = settings->deviceName;
-  openData.deviceID = settings->deviceIndex;
+  openData.deviceID = settings->deviceID;
+  openData.scsiMode = settings->scsiMode;
+  db->db_scsiMode = settings->scsiMode;
 
   
   enum SCSIWifi_OpenResult scsiResult;
   SCSIWIFIDevice* wifiDevice;
   
-  if ((settings->deviceIndex<0) || (settings->deviceIndex>7)) {
+  if ((settings->deviceID<0) || (settings->deviceID>7)) {
     D(("scsidayna: Searching for DaynaPORT Device to Configure\n"));
     // Highly likely it will be on 4 as its in the example so start there!
     for (USHORT deviceID=4; deviceID<4+8; deviceID++) {
@@ -163,13 +166,13 @@ __saveds struct Device *DevInit( ASMR(d0) DEVBASEP                  ASMREG(d0),
     }
   } else {
     D(("scsidayna: Opening Device to Configure\n"));
-    openData.deviceID = settings->deviceIndex;  
+    openData.deviceID = settings->deviceID;  
     wifiDevice = SCSIWifi_open(&openData, &scsiResult);
   }
   if (!wifiDevice) {
     switch (scsiResult) {
       case sworOpenDeviceFailed:
-        D(("scsidayna: Failed to open SCSI device \"%s\" ID %ld\n", settings->deviceName, settings->deviceIndex));
+        D(("scsidayna: Failed to open SCSI device \"%s\" ID %ld\n", settings->deviceName, settings->deviceID));
         break;  
       case sworOutOfMem:  D(("scsidayna: Out of memory opening SCSI device\n"));    break;
       case sworInquireFail:  D(("scsidayna: Inquiry of SCSI device failed\n"));    break;
@@ -389,8 +392,10 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
     if (ioreq->ios2_BufferManagement == NULL) {
       ioreq->ios2_Req.io_Error = S2ERR_BAD_ARGUMENT;
       ioreq->ios2_WireError = S2WERR_BUFF_ERROR;
-    }
-    else {
+    } else if (!db->db_currentWifiState) {
+      ioreq->ios2_Req.io_Error = S2ERR_OUTOFSERVICE;
+      ioreq->ios2_WireError = S2WERR_UNIT_OFFLINE;
+    } else {
       ioreq->ios2_Req.io_Flags &= ~SANA2IOF_QUICK;
       ObtainSemaphore(&db->db_ReadListSem);
       AddHead((struct List*)&db->db_ReadList, (struct Node*)ioreq);
@@ -415,7 +420,11 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
     if (ioreq->ios2_BufferManagement == NULL) {
       ioreq->ios2_Req.io_Error = S2ERR_BAD_ARGUMENT;
       ioreq->ios2_WireError = S2WERR_BUFF_ERROR;
-    }
+    } 
+   else if (!db->db_currentWifiState) {
+     ioreq->ios2_Req.io_Error = S2ERR_OUTOFSERVICE;
+     ioreq->ios2_WireError = S2WERR_UNIT_OFFLINE;
+   }
     else {
       ioreq->ios2_Req.io_Flags &= ~SANA2IOF_QUICK;
       ioreq->ios2_Req.io_Error = 0;
@@ -428,12 +437,12 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
     break;
   
     case S2_ONEVENT:
-      if (((ioreq->ios2_WireError & S2EVENT_ONLINE) && (db->db_online)) ||
-          ((ioreq->ios2_WireError & S2EVENT_OFFLINE) && (!db->db_online))) {
-            ioreq->ios2_Req.io_Error = 0;
-            ioreq->ios2_WireError &= (S2EVENT_ONLINE|S2EVENT_OFFLINE);
-            DevTermIO(db, (struct IORequest*)ioreq);
-            ioreq = NULL;
+      if (((ioreq->ios2_WireError & S2EVENT_ONLINE) && (db->db_currentWifiState)) ||
+         ((ioreq->ios2_WireError & S2EVENT_OFFLINE) && (!db->db_currentWifiState))) {
+           ioreq->ios2_Req.io_Error = 0;
+           ioreq->ios2_WireError &= (S2EVENT_ONLINE|S2EVENT_OFFLINE);
+           DevTermIO(db, (struct IORequest*)ioreq);
+           ioreq = NULL;
       } else
       if ((ioreq->ios2_WireError & (S2EVENT_ONLINE|S2EVENT_OFFLINE|S2EVENT_ERROR|S2EVENT_TX|S2EVENT_RX|S2EVENT_BUFF|S2EVENT_HARDWARE|S2EVENT_SOFTWARE)) != ioreq->ios2_WireError)
       {
@@ -456,8 +465,10 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
       if (ioreq->ios2_BufferManagement == NULL) {
         ioreq->ios2_Req.io_Error = S2ERR_BAD_ARGUMENT;
         ioreq->ios2_WireError = S2WERR_BUFF_ERROR;
-      }
-      else
+      } else if (!db->db_currentWifiState) {
+        ioreq->ios2_Req.io_Error = S2ERR_OUTOFSERVICE;
+        ioreq->ios2_WireError = S2WERR_UNIT_OFFLINE;
+      } else
       {                      
         ioreq->ios2_Req.io_Flags &= ~SANA2IOF_QUICK;
         ObtainSemaphore(&db->db_ReadOrphanListSem);
@@ -602,15 +613,15 @@ ULONG write_frame(struct IOSana2Req *req, UBYTE* frame, SCSIWIFIDevice scsiDevic
        // buffer was  
        if (SCSIWifi_sendFrame(scsiDevice, inputFrame, sz)) {
          rc = 1;
-         if (req->ios2_Req.io_Flags & SANA2IOF_RAW) D(("FRAME RAW SENT %ld bytes", sz)); else D(("FRAME SENT %ld bytes", sz));
+         //if (req->ios2_Req.io_Flags & SANA2IOF_RAW) D(("FRAME RAW SENT %ld bytes", sz)); else D(("FRAME SENT %ld bytes", sz));
          req->ios2_Req.io_Error = req->ios2_WireError = 0;
          db->db_DevStats.PacketsSent++;
        } else {
          rc = 0;  
          req->ios2_Req.io_Error = S2ERR_TX_FAILURE;
          req->ios2_WireError = S2WERR_GENERIC_ERROR;
-        DoEvent(db, S2EVENT_ERROR | S2EVENT_TX | S2EVENT_HARDWARE);
-          D(("SEND FAIL"));
+         DoEvent(db, S2EVENT_ERROR | S2EVENT_TX | S2EVENT_HARDWARE);
+         D(("SEND FAIL"));
        }
      }
    } else {
@@ -635,12 +646,6 @@ ULONG read_frame(DEVBASEP, struct IOSana2Req *req, UBYTE *frm, USHORT packetSize
 
   req->ios2_PacketType = ((USHORT)frm[12+6]<<8)|((USHORT)frm[13+6]);
   
-  // WARNING! Incoorrect firmware
-  if (frm[2] != 0xF8) {
-    // Weird combination
-    DoEvent(db, S2EVENT_HARDWARE | S2EVENT_RX | S2EVENT_SOFTWARE);
-  }
-
   if (req->ios2_Req.io_Flags & SANA2IOF_RAW) {
     frame_ptr = frm+6;
     datasize = sz;
@@ -722,8 +727,6 @@ void rejectAllPackets(DEVBASEP) {
 
 // This runs as a seperate task!
 __saveds void frame_proc() {
-  ULONG wmask;
-
   D(("scsidayna_task: frame_proc()\n"));
 
   struct ProcInit* init;
@@ -746,6 +749,9 @@ __saveds void frame_proc() {
   openData.dosBase = (void*)DOSBase;
   openData.deviceDriverName = settings->deviceName;
   openData.deviceID = db->db_scsiDeviceID;
+  openData.scsiMode = db->db_scsiMode;
+
+  D(("Opening with scsimode %ld", openData.scsiMode));
 
   enum SCSIWifi_OpenResult scsiResult;
   SCSIWIFIDevice scsiDevice = SCSIWifi_open(&openData, &scsiResult);
@@ -772,14 +778,13 @@ __saveds void frame_proc() {
     if (!time_req) D(("scsidayna_task: Out of memory [2]\n")); else DeleteIORequest((struct IORequest *)time_req);
 
     switch (scsiResult) {
-      case sworOpenDeviceFailed: D(("scsidayna_task: Failed to open SCSI device \"%s\" ID %d\n", settings->deviceName, settings->deviceIndex)); break;  
+      case sworOpenDeviceFailed: D(("scsidayna_task: Failed to open SCSI device \"%s\" ID %d\n", settings->deviceName, settings->deviceID)); break;  
       case sworOutOfMem:  D(("scsidayna_task: Out of memory opening SCSI device\n"));    break;
       case sworInquireFail:  D(("scsidayna_task: Inquiry of SCSI device failed\n"));    break;
       case sworNotDaynaDevice:  D(("scsidayna_task: Device is not a DaynaPort SCSI device\n"));    break;
     }
 
     if (((char)timerPort.mp_SigBit)>=0) FreeSignal(timerPort.mp_SigBit);
-
     ObtainSemaphore(&db->db_ProcExitSem);
     ReplyMsg((struct Message*)init);
     Forbid();
@@ -788,13 +793,14 @@ __saveds void frame_proc() {
     return;
   }
 
+  // Helpful!
+  struct Library *TimerBase = (APTR) time_req->tr_node.io_Device;
+
   init->error = 0;
   ObtainSemaphore(&db->db_ProcExitSem);  
   ReplyMsg((struct Message*)init);
 
   unsigned long timerSignalMask = (1UL << timerPort.mp_SigBit);
-
-  wmask = SIGBREAKF_CTRL_C | timerSignalMask | SIGBREAKF_CTRL_F;
 
   time_req->tr_node.io_Command = TR_ADDREQUEST;
   time_req->tr_time.tv_secs = 0;
@@ -802,35 +808,56 @@ __saveds void frame_proc() {
   ULONG recv = 0;
   USHORT currentWifiState = 0;
 
-  if (settings->taskPriority != 0)
-    SetTaskPri((struct Task*)db->db_Proc,settings->taskPriority);                  
+ if (settings->taskPriority != 0)
+   SetTaskPri((struct Task*)db->db_Proc,settings->taskPriority);      
 
-  D(("scsidayna_task: starting loop\n"));
+  struct timeval timeLastWifiCheck = {0UL,0UL};
+  struct timeval timeWifiCheck = {0UL,0UL};
+  USHORT lastWifiStatus = 1;    // assume OK, although this should get overwritten straight away
+
+  D(("scsidayna_task: starting loop 1.0\n"));
   while (!(recv & SIGBREAKF_CTRL_C)) {
     struct IOSana2Req *ior = NULL, *nextwrite;
-
     USHORT shouldBeEnabled = db->db_online;
+
+    GetSysTime(&timeWifiCheck);
+    // Every 5 seconds check WIFI status
+    if (abs(timeWifiCheck.tv_secs-timeLastWifiCheck.tv_secs)>=5) {
+      struct SCSIWifi_NetworkEntry wifi;
+      if (SCSIWifi_getNetwork(scsiDevice, &wifi)) {
+        if (wifi.rssi == 0) {
+          D(("scsidayna_task: WIFI not connected\n"));
+          lastWifiStatus = 0;
+        } else {
+          lastWifiStatus = 1;
+          D(("scsidayna_task: WIFI connected with strength %ld dB\n", wifi.rssi));
+        }
+      }
+      timeLastWifiCheck.tv_secs = timeWifiCheck.tv_secs;
+    }
+    if (!lastWifiStatus) shouldBeEnabled = 0;
 
     // Handle state toggle - also goes offline if theres no connections
     if (currentWifiState != shouldBeEnabled) {
       currentWifiState = shouldBeEnabled;
       SCSIWifi_enable(scsiDevice, shouldBeEnabled); 
       if (!shouldBeEnabled) rejectAllPackets(db);
-      if (shouldBeEnabled) D(("scsidayna_task: Enabling WIFI\n")); else D(("scsidayna_task: Disabling WIFI\n"));
+      if (shouldBeEnabled) GetSysTime(&db->db_DevStats.LastStart);
       DoEvent(db, shouldBeEnabled ? S2EVENT_ONLINE : S2EVENT_OFFLINE);
+      db->db_currentWifiState = currentWifiState;
     }
     
-    UBYTE morePackets = 0;
     if (currentWifiState) {
+      UBYTE morePackets = 0;
+      USHORT counter = 0;   
       do {
         USHORT packetSize = SCSIWIFI_PACKET_MAX_SIZE + 6;
-        if (SCSIWifi_receiveFrame(scsiDevice, packetData, &packetSize)) {   
-          if (packetData[2] != 0xF8) db->db_DevStats.BadData++;   // shouldnt happen if the firmware is up to date
+        if (SCSIWifi_receiveFrame(scsiDevice, packetData, &packetSize)) {    
           morePackets = packetData[5];
           db->db_DevStats.PacketsReceived++;
 
           if (packetSize > 6) {
-            USHORT packet_type = ((USHORT)packetData[18]<<8)|((USHORT)packetData[19]);
+            USHORT packet_type = ((USHORT)packetData[18]<<8)|((USHORT)packetData[19]);   
 
             ObtainSemaphore(&db->db_ReadListSem);
             for (ior = (struct IOSana2Req *)db->db_ReadList.lh_Head; ior->ios2_Req.io_Message.mn_Node.ln_Succ; ior = (struct IOSana2Req *)ior->ios2_Req.io_Message.mn_Node.ln_Succ) {
@@ -838,6 +865,7 @@ __saveds void frame_proc() {
                 Remove((struct Node*)ior);
                 read_frame(db, ior, packetData, packetSize);        
                 DevTermIO(db, (struct IORequest *)ior);
+                counter++;
                 ior = NULL;
                 break;
               }
@@ -857,38 +885,46 @@ __saveds void frame_proc() {
               } 
             }
           }
-        } 
-      } while (morePackets);
+        } else {
+          morePackets = 0;
+          D(("RECV FAILED\n"));
+          DoEvent(db, S2EVENT_ERROR | S2EVENT_HARDWARE | S2EVENT_RX);
+        }
+        recv = SetSignal(0, SIGBREAKF_CTRL_C|SIGBREAKF_CTRL_F);
+        // Keep going until we're told theres no more data, or we need to send, or terminate
+      } while ((morePackets) && (!recv));
+
+      // Prevent delaying if there was data incoming
+      if (counter >=2 ) morePackets = 1;
 
       // Send packets
       ObtainSemaphore(&db->db_WriteListSem);
-      USHORT counter = 8;   // SCSI device can only handle 10 at a time anyway
+      counter = 8;   // Max of 8 per loop      
       for(ior = (struct IOSana2Req *)db->db_WriteList.lh_Head; (nextwrite = (struct IOSana2Req *) ior->ios2_Req.io_Message.mn_Node.ln_Succ) != NULL; ior = nextwrite ) {
           ULONG res = write_frame(ior, packetData, scsiDevice, db);
           Remove((struct Node*)ior);
           DevTermIO(db, (struct IORequest *)ior);
+          morePackets=1;
           counter--;
-          morePackets = 1; // no delays please
           if (!counter) break;
       }
       ReleaseSemaphore(&db->db_WriteListSem);
-    }
 
-    if (!morePackets) {
-      if (!currentWifiState) {
-        time_req->tr_time.tv_micro = 250 * 1000L;
-        SendIO((struct IORequest *)time_req);
-        recv = Wait(wmask);
-      } else
-      if (settings->pollDelay) {
-        time_req->tr_time.tv_micro = settings->pollDelay * 1000L;
-        SendIO((struct IORequest *)time_req);
-        recv = Wait(wmask);
+      if (recv & SIGBREAKF_CTRL_C) {
+        D(("Terminate Requested"));
       } else {
-        recv = SetSignal(0, wmask);
+        if (morePackets)
+          time_req->tr_time.tv_micro = 1000L; // Still a yield, but less. If we take up too much SCSI time the file access slows down
+        else time_req->tr_time.tv_micro = 10000L;
+        SendIO((struct IORequest *)time_req);
+        recv = Wait(SIGBREAKF_CTRL_C | timerSignalMask | SIGBREAKF_CTRL_F);        
       }
     } else {
-      recv = SetSignal(0, wmask);   // still need to know about termination
+        // Not enabled? Pause for a decent amount of time
+        time_req->tr_time.tv_micro = 250 * 1000L;
+        SendIO((struct IORequest *)time_req);
+        recv = Wait(SIGBREAKF_CTRL_C | timerSignalMask | SIGBREAKF_CTRL_F);
+        AbortIO((struct IORequest *)time_req);
     }
   }
 
