@@ -675,7 +675,7 @@ LONG SCSIWifi_sendFrame(SCSIWIFIDevice device, UBYTE* packet, UWORD packetSize) 
 // packetSize will *need* to be NETWORK_PACKET_MAX_SIZE+6
 //   Byte:   0 High Byte of packet size
 //           1: Low Byte of packet size
-//           2: 0xF8 - magic number. If its NOT this then the device is NOT running the right firmware
+//           2: 0xA8/A8/0 - magic number. 
 //           3, 4 = 0
 //           5: 0 if this was the last packet, or 0x10 if there are more to read
 //      last 4 bytes are the CRC for the packet which we dont care about!
