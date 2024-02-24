@@ -44,14 +44,6 @@ where:
 - SSID The SSID/Wifi name to connect to if autoconnect=1
 - KEY the wifi key/password
 
-scsi-device-driver-name.device
--	deviceID  (0-7) or -1 for auto-detect
--	40		(device delay time when idle)
--	0		(task priority, -128 to 127 - see below)
--	1		(1/0 for auto connect to WIFI - you can configure this in the bluescsi.ini file too)
--	ssid	(wifi SSID)
--	pwd		(wifi password)
-
 ## Mode
 This patches around weirdness in the various SCSI drivers. Mode should be:
 - 0: This runs in normal mode

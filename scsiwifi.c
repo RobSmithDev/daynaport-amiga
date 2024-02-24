@@ -684,11 +684,11 @@ LONG SCSIWifi_receiveFrame(SCSIWIFIDevice device, UBYTE* packetBuffer, UWORD* pa
 
    switch (dev->scsiMode) {
        case 1:  // scsi.device mode
-            SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_READFRAME, 0,  0xF8, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
+            SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_CMD, SCSI_NETWORK_WIFI_OPT_ALTREAD,  0xA8, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
             break;
 
         case 2:  // gvpscsi.device mode
-            SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_CMD, SCSI_NETWORK_WIFI_OPT_ALTREAD,  0xF9, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
+            SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_CMD, SCSI_NETWORK_WIFI_OPT_ALTREAD,  0xA9, (*packetSize) >> 8, (*packetSize) & 0xFF, 0);
             break;
 
         default:
