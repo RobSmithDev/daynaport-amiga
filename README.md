@@ -6,7 +6,7 @@ This is an implementation of a SANA-II driver for the Amiga, that will use the B
 This code is based on the MNT ZZ9000Net driver by Lukas F. Hartmann (which is based on work by Henryk Richter) and also borrows a little from the PlipBox device by, 
 well, theres several people.
 
-This requires the updates in https://github.com/RobSmithDev/BlueSCSI-v2 in order to work.
+This requires the updates in https://github.com/RobSmithDev/BlueSCSI-v2 in order to work.    
 **A Compiled Version Is Included With The Downloadable Release**
 
 I've tested it with the following setups:
