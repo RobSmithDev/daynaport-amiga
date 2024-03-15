@@ -7,6 +7,7 @@ This code is based on the MNT ZZ9000Net driver by Lukas F. Hartmann (which is ba
 well, theres several people.
 
 This requires the updates in https://github.com/RobSmithDev/BlueSCSI-v2 in order to work.
+**A Compiled Version Is Included With The Downloadable Release**
 
 I've tested it with the following setups:
 ### Amiga 500+ (2M Chip)
