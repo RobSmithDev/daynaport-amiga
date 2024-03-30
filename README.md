@@ -6,6 +6,8 @@ This is an implementation of a SANA-II driver for the Amiga, that will use the B
 This code is based on the MNT ZZ9000Net driver by Lukas F. Hartmann (which is based on work by Henryk Richter) and also borrows a little from the PlipBox device by, 
 well, theres several people.
 
+For a step-by-step guide on installing, check out (this video by Retronaut)[https://www.youtube.com/watch?v=FDtqd04bq-k]
+
 This requires the updates in https://github.com/RobSmithDev/BlueSCSI-v2 in order to work.    
 **A Compiled Version Is Included With The Downloadable Release**
 
@@ -23,6 +25,9 @@ I've tested it with the following setups:
 #### Side effects
 The hdd light constantly flashes while the driver is in use.
 The driver needs to be copied to the Devs:Networks folder and then setup your TCP/IP stack as normal.
+
+#### Notes
+If you find your data transfer is *very* slow, like less than 5k/s then check you've turned the debug log off within BlueSCSI!
 
 ### Config File (IMPORTANT)
 scsidayna.prefs contains an example config file for the device. This needs to be copied to ENVARC on the Amiga and rebooted
