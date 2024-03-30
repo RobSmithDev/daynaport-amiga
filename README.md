@@ -1,10 +1,10 @@
-# DaynaPORT Driver for BlueSCSI (Amiga)
+# Amiga DaynaPORT Driver for BlueSCSI V2 and ZuluSCSI Pico OSHW
 Created by RobSmithDev
 Based on the MNT ZZ9000 Network Driver by Lukas F. Hartmann and uses bits I learnt from reading how PlipBox works.
 
-This is an implementation of a SANA-II driver for the Amiga, that will use the BlueScsi V2 WIFI version to give internet access to the machine!
-This code is based on the MNT ZZ9000Net driver by Lukas F. Hartmann (which is based on work by Henryk Richter) and also borrows a little from the PlipBox device by, 
-well, theres several people.
+This is an implementation of a SANA-II driver for the Amiga, which allows you to use either a Pico-W enabled [BlueSCSI V2](https://bluescsi.com/docs/WiFi-DaynaPORT) or [ZuluSCSI Pico OSHW](https://zuluscsi.com/oshw/) board to give internet access to the machine!
+
+This code is based on the MNT ZZ9000Net driver by Lukas F. Hartmann (which is based on work by Henryk Richter) and also borrows a little from the PlipBox device driver, which has several contributors.
 
 For a step-by-step guide on installing, check out (this video by Retronaut)[https://www.youtube.com/watch?v=FDtqd04bq-k]
 
@@ -14,16 +14,17 @@ This requires the updates in https://github.com/RobSmithDev/BlueSCSI-v2 in order
 I've tested it with the following setups:
 ### Amiga 500+ (2M Chip)
 -	A590 HDD (2M fast ram, 7.0 ROM) 
--	Blue Scsi V2 Wifi version
+-	BlueSCSI Pico (V2) Wi-fi version, or 
+-	ZuluSCSI Pico OSHW board with Pico W, running stock/unmodified ZuluSCSI Pico firmware version v2024.03.07, or later.
 -	Kickstart 3.2
 	
 ### Amiga 2000 (2M Chip)
 -	Impact A2000-HC+8 Series II (8M Fast Ram) 
--	Blue Scsi V2 Wifi version
+-	BlueSCSI Pico (V2) Wi-Fi version or ZuluSCSI Pico OSHW board with Pico W.
 -	Kickstart 3.1
 	
 #### Side effects
-The hdd light constantly flashes while the driver is in use.
+With BlueSCSI V2 hardware, the HDD light constantly flashes while the driver is in use.
 The driver needs to be copied to the Devs:Networks folder and then setup your TCP/IP stack as normal.
 
 #### Notes
