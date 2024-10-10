@@ -8,7 +8,7 @@ well, theres several people.
 
 For a step-by-step guide on installing, check out (this video by Retronaut)[https://www.youtube.com/watch?v=FDtqd04bq-k]
 
-This requires the updates in https://github.com/RobSmithDev/BlueSCSI-v2 in order to work.    
+This requires the latest BlueSCSI V2 firmware in order to work.    
 **A Compiled Version Is Included With The Downloadable Release**
 
 I've tested it with the following setups:
