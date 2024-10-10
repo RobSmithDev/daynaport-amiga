@@ -30,7 +30,8 @@ The driver needs to be copied to the Devs:Networks folder and then setup your TC
 If you find your data transfer is *very* slow, like less than 5k/s then check you've turned the debug log off within BlueSCSI!
 
 ### Config File (IMPORTANT)
-scsidayna.prefs contains an example config file for the device. This needs to be copied to ENVARC on the Amiga and rebooted
+scsidayna.prefs contains an example config file for the device. This needs to be copied to *ENVARC:* on the Amiga and rebooted. 
+**If you change this file, they will not be picked up until restart or you copy it to ENV:**
 The format of that file is:
 
 DEVICE=scsi.device\
@@ -55,6 +56,9 @@ This patches around weirdness in the various SCSI drivers. Mode should be:
 - 0: This runs in normal mode
 - 1: Runs in 24-byte pad mode (required for scsi.device - A590/A2091)
 - 2: Runs in 'single transfer' mode (required for gvpscsi.device)
+
+## DEVICE
+This needs to match the SCSI interface you're using. You can check this using HDToolbox (see what device it uses in the tool type) or SCSIMounter etc.
 
 ## Task Priority
 A small note about task priority. If left at 0 the device will function perfectly fine, however the throughput of data is somewhat all over the place.
