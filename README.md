@@ -8,8 +8,8 @@ well, theres several people.
 
 For a step-by-step guide on installing, check out (this video by Retronaut)[https://www.youtube.com/watch?v=FDtqd04bq-k]
 
-This requires the latest BlueSCSI V2 firmware in order to work.    
-**A Compiled Version Is Included With The Downloadable Release**
+**This requires the latest BlueSCSI V2 firmware in order to work.**
+
 
 I've tested it with the following setups:
 ### Amiga 500+ (2M Chip)
