@@ -169,7 +169,7 @@ void strcpy_s(char* dest, char* src, USHORT maxLength) {
     dest[i-1] = '\0';
 }
 
-// Rmeoves any trailing newline characters
+// Removes any trailing newline characters
 void removeNL(char* text) {
     while (*text) {
         if (*text == '\n') {

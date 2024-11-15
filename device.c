@@ -725,7 +725,7 @@ void rejectAllPackets(DEVBASEP) {
    D(("Reject all Packets done\n"));
 }
 
-// This runs as a seperate task!
+// This runs as a separate task!
 __saveds void frame_proc() {
   D(("scsidayna_task: frame_proc()\n"));
 
@@ -740,7 +740,7 @@ __saveds void frame_proc() {
   }
 
   struct devbase* db = init->db;
-  // Need to open a seperate connection to the SCSI device, This has the advantage that it can communicate at the same time!
+  // Need to open a separate connection to the SCSI device, This has the advantage that it can communicate at the same time!
 
   struct ScsiDaynaSettings* settings = (struct ScsiDaynaSettings*)db->db_scsiSettings;
   struct SCSIDevice_OpenData openData;
