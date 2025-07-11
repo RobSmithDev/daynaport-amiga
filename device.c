@@ -265,8 +265,9 @@ __saveds LONG DevOpen( ASMR(a1) struct IOSana2Req *ioreq           ASMREG(a1),
       NewList(&db->db_ReadOrphanList);
       InitSemaphore(&db->db_ReadOrphanListSem);
 
+      InitSemaphore(&db->db_ProcSem);
       db->db_online = 1;
-    
+
       struct ProcInit init;
       struct MsgPort *port;
 
@@ -274,8 +275,6 @@ __saveds LONG DevOpen( ASMR(a1) struct IOSana2Req *ioreq           ASMREG(a1),
         D(("scsidayna: Starting Server\n"));
         if (db->db_Proc = CreateNewProcTags(NP_Entry, frame_proc, NP_Name,
                                             frame_proc_name, NP_Priority, 0, TAG_DONE)) {
-          InitSemaphore(&db->db_ProcExitSem);
-
           init.error = 1;
           init.db = db;
           init.msg.mn_Length = sizeof(init);
@@ -284,7 +283,7 @@ __saveds LONG DevOpen( ASMR(a1) struct IOSana2Req *ioreq           ASMREG(a1),
           D(("scsidayna: handover db: %lx\n",init.db));
 
           PutMsg(&db->db_Proc->pr_MsgPort, (struct Message*)&init);
-          WaitPort(port);   
+          WaitPort(port);
 
           if (init.error) {
             D(("scsidayna:process startup error\n"));
@@ -342,8 +341,8 @@ __saveds BPTR DevClose(   ASMR(a1) struct IORequest *ioreq        ASMREG(a1),
       Signal((struct Task*)db->db_Proc, SIGBREAKF_CTRL_C);
       db->db_Proc = 0;
 
-      ObtainSemaphore(&db->db_ProcExitSem);
-      ReleaseSemaphore(&db->db_ProcExitSem);
+      ObtainSemaphore(&db->db_ProcSem);
+      ReleaseSemaphore(&db->db_ProcSem);
     }   
   }
 
@@ -740,6 +739,10 @@ __saveds void frame_proc() {
   }
 
   struct devbase* db = init->db;
+  // This semaphore must be obtained by this process before it replies its init message, and then
+  // hold it for its entire lifetime, otherwise the process exit won't be arbitrated properly.
+  ObtainSemaphore(&db->db_ProcSem);
+
   // Need to open a seperate connection to the SCSI device, This has the advantage that it can communicate at the same time!
 
   struct ScsiDaynaSettings* settings = (struct ScsiDaynaSettings*)db->db_scsiSettings;
@@ -785,10 +788,9 @@ __saveds void frame_proc() {
     }
 
     if (((char)timerPort.mp_SigBit)>=0) FreeSignal(timerPort.mp_SigBit);
-    ObtainSemaphore(&db->db_ProcExitSem);
     ReplyMsg((struct Message*)init);
     Forbid();
-    ReleaseSemaphore(&db->db_ProcExitSem);
+    ReleaseSemaphore(&db->db_ProcSem);
     D(("scsidayna_task: shutdown\n"));
     return;
   }
@@ -797,7 +799,6 @@ __saveds void frame_proc() {
   struct Library *TimerBase = (APTR) time_req->tr_node.io_Device;
 
   init->error = 0;
-  ObtainSemaphore(&db->db_ProcExitSem);  
   ReplyMsg((struct Message*)init);
 
   unsigned long timerSignalMask = (1UL << timerPort.mp_SigBit);
@@ -938,5 +939,6 @@ __saveds void frame_proc() {
   SCSIWifi_close(scsiDevice);
 
   Forbid();
-  ReleaseSemaphore(&db->db_ProcExitSem);
+  ReleaseSemaphore(&db->db_ProcSem);
+  D(("scsidayna_task: shutdown\n"));
 }
