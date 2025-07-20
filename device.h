@@ -75,7 +75,7 @@ struct devbase {
 	struct List db_ReadOrphanList;
 	struct SignalSemaphore db_ReadOrphanListSem;
 	struct Process* db_Proc;
-	struct SignalSemaphore db_ProcExitSem;
+	struct SignalSemaphore db_ProcSem;
 };
 
 #ifndef DEVBASETYPE
