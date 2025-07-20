@@ -6,22 +6,30 @@ This is an implementation of a SANA-II driver for the Amiga, which allows you to
 
 This code is based on the MNT ZZ9000Net driver by Lukas F. Hartmann (which is based on work by Henryk Richter) and also borrows a little from the PlipBox device driver, which has several contributors.
 
-For a step-by-step guide on installing, check out (this video by Retronaut)[https://www.youtube.com/watch?v=FDtqd04bq-k]
+Setup Guides:
+Retronaut: [https://www.youtube.com/watch?v=FDtqd04bq-k]
+BlueSCSI Docs: [https://github.com/blueSCSI/blueSCSI-v2/wiki/WiFi-Amiga]
+Help: [https://discord.gg/pQsU3CR9fe]
+Workbench GUI Config Tool: [https://github.com/AidanHolmes/BlueSCSIUI/releases/]
 
-**This requires the latest BlueSCSI V2 firmware in order to work.**
+### SCSI Hardware Requirements:
+-	BlueSCSI Pico (V2) Wi-fi version (v2024.10.26 or later firmware) 
+-	ZuluSCSI Pico OSHW board with Pico W (v2024.03.07 or later firmware)
+
+Tested configurations:
+
+### Amiga 500/+ (2M Chip)
+-	A590 HDD (2M fast ram, 7.0 ROM) with Kickstart 3.2 (scsi.device)
+-	Ematrix 530 (ematscsi.device)
 
 
-I've tested it with the following setups:
-### Amiga 500+ (2M Chip)
--	A590 HDD (2M fast ram, 7.0 ROM) 
--	BlueSCSI Pico (V2) Wi-fi version, or 
--	ZuluSCSI Pico OSHW board with Pico W, running stock/unmodified ZuluSCSI Pico firmware version v2024.03.07, or later.
--	Kickstart 3.2
-	
+### Amiga 1200
+-   Blizzard 1230IV / SCSI Kit (1230scsi.device)
+
 ### Amiga 2000 (2M Chip)
--	Impact A2000-HC+8 Series II (8M Fast Ram) 
--	BlueSCSI Pico (V2) Wi-Fi version or ZuluSCSI Pico OSHW board with Pico W.
--	Kickstart 3.1
+-   GVP Impact A2000-HC+8 Series II (8M Fast Ram), Kickstart 3.1 (gvpscsi.device)
+-   A2091, Kickstart 3.1 (scsi.device)
+
 	
 #### Side effects
 With BlueSCSI V2 hardware, the HDD light constantly flashes while the driver is in use.
@@ -33,6 +41,8 @@ If you find your data transfer is *very* slow, like less than 5k/s then check yo
 ### Config File (IMPORTANT)
 scsidayna.prefs contains an example config file for the device. This needs to be copied to *ENVARC:* on the Amiga and rebooted. 
 **If you change this file, they will not be picked up until restart or you copy it to ENV:**
+You can also manage this file with the orkbench GUI config tool by Aidan Holmes: [https://github.com/AidanHolmes/BlueSCSIUI/releases/]
+
 The format of that file is:
 
 DEVICE=scsi.device\
