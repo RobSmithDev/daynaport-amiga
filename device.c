@@ -917,11 +917,14 @@ __saveds void frame_proc() {
       if (recv & SIGBREAKF_CTRL_C) {
         D(("Terminate Requested"));
       } else {
-        if (morePackets)
-          time_req->tr_time.tv_micro = 1000L; // Still a yield, but less. If we take up too much SCSI time the file access slows down
-        else time_req->tr_time.tv_micro = 10000L;
-        SendIO((struct IORequest *)time_req);
-        recv = Wait(SIGBREAKF_CTRL_C | timerSignalMask | SIGBREAKF_CTRL_F);        
+        if (!morePackets) {
+          // we use unit VBLANK therefore the granularity of our wait will be 1/50th (1/60th)
+          // of a second. So essentially this will wait until the next vblank, unless
+          // signaled, which is good enough to yield.
+          time_req->tr_time.tv_micro = 1L;
+          SendIO((struct IORequest *)time_req);
+          recv = Wait(SIGBREAKF_CTRL_C | timerSignalMask | SIGBREAKF_CTRL_F);
+        }
       }
     } else {
         // Not enabled? Pause for a decent amount of time
