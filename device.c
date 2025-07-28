@@ -397,7 +397,7 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
     } else {
       ioreq->ios2_Req.io_Flags &= ~SANA2IOF_QUICK;
       ObtainSemaphore(&db->db_ReadListSem);
-      AddHead((struct List*)&db->db_ReadList, (struct Node*)ioreq);
+      AddTail((struct List*)&db->db_ReadList, (struct Node*)ioreq);
       ReleaseSemaphore(&db->db_ReadListSem);
       ioreq = NULL;
     }
@@ -428,7 +428,10 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
       ioreq->ios2_Req.io_Flags &= ~SANA2IOF_QUICK;
       ioreq->ios2_Req.io_Error = 0;
       ObtainSemaphore(&db->db_WriteListSem);
-      AddHead((struct List*)&db->db_WriteList, (struct Node*)ioreq);
+      // The sending process reads from the head of the list,
+      // so add to the tail here, otherwise packets could go out
+      // in swapped order
+      AddTail((struct List*)&db->db_WriteList, (struct Node*)ioreq);
       ReleaseSemaphore(&db->db_WriteListSem);
       Signal((struct Task*)db->db_Proc, SIGBREAKF_CTRL_F);
       ioreq = NULL;
