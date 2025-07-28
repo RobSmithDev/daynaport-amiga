@@ -397,7 +397,7 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
     } else {
       ioreq->ios2_Req.io_Flags &= ~SANA2IOF_QUICK;
       ObtainSemaphore(&db->db_ReadListSem);
-      AddHead((struct List*)&db->db_ReadList, (struct Node*)ioreq);
+      AddTail((struct List*)&db->db_ReadList, (struct Node*)ioreq);
       ReleaseSemaphore(&db->db_ReadListSem);
       ioreq = NULL;
     }
@@ -428,7 +428,10 @@ __saveds VOID DevBeginIO( ASMR(a1) struct IOSana2Req *ioreq       ASMREG(a1),
       ioreq->ios2_Req.io_Flags &= ~SANA2IOF_QUICK;
       ioreq->ios2_Req.io_Error = 0;
       ObtainSemaphore(&db->db_WriteListSem);
-      AddHead((struct List*)&db->db_WriteList, (struct Node*)ioreq);
+      // The sending process reads from the head of the list,
+      // so add to the tail here, otherwise packets could go out
+      // in swapped order
+      AddTail((struct List*)&db->db_WriteList, (struct Node*)ioreq);
       ReleaseSemaphore(&db->db_WriteListSem);
       Signal((struct Task*)db->db_Proc, SIGBREAKF_CTRL_F);
       ioreq = NULL;
@@ -914,11 +917,14 @@ __saveds void frame_proc() {
       if (recv & SIGBREAKF_CTRL_C) {
         D(("Terminate Requested"));
       } else {
-        if (morePackets)
-          time_req->tr_time.tv_micro = 1000L; // Still a yield, but less. If we take up too much SCSI time the file access slows down
-        else time_req->tr_time.tv_micro = 10000L;
-        SendIO((struct IORequest *)time_req);
-        recv = Wait(SIGBREAKF_CTRL_C | timerSignalMask | SIGBREAKF_CTRL_F);        
+        if (!morePackets) {
+          // we use unit VBLANK therefore the granularity of our wait will be 1/50th (1/60th)
+          // of a second. So essentially this will wait until the next vblank, unless
+          // signaled, which is good enough to yield.
+          time_req->tr_time.tv_micro = 1L;
+          SendIO((struct IORequest *)time_req);
+          recv = Wait(SIGBREAKF_CTRL_C | timerSignalMask | SIGBREAKF_CTRL_F);
+        }
       }
     } else {
         // Not enabled? Pause for a decent amount of time
