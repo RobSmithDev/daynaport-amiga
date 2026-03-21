@@ -1254,10 +1254,10 @@ __saveds void frame_proc() {
 	logMessage(db,"PacketServer: Shutting down [1]");
 	
 	// Make sure it's finished - this prevents an intermittent crash at shutdown!
-	if (CheckIO((struct IORequest *)time_req)) { // IO is pending
-        AbortIO((struct IORequest *)time_req);
-        WaitIO((struct IORequest *)time_req);  // wait until IO fully done
-    }
+	if (!CheckIO((struct IORequest *)time_req)) { // IO is pending
+		AbortIO((struct IORequest *)time_req);
+		WaitIO((struct IORequest *)time_req);  // wait until IO fully done
+	}
 	
 	D(("scsidayna_task: i/o shutdown\n"));
 	logMessage(db,"PacketServer: Shutting down [2]");
