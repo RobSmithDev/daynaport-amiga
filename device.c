@@ -1179,7 +1179,9 @@ __saveds void frame_proc() {
 						dataOut+=2;
 						spaceRemaining -= 2;
 
-						*((USHORT*)(dataOut+12)) = (USHORT)ior->ios2_PacketType;
+						// word at (potentially) odd address is an address error on 68000
+						dataOut[12] = (UBYTE)(ior->ios2_PacketType >> 8);
+						dataOut[13] = (UBYTE)ior->ios2_PacketType;
 						// Add ethernet header
 						memcpy(dataOut, ior->ios2_DstAddr, HW_ADDRFIELDSIZE);
 						memcpy(dataOut+6, HW_MAC, HW_ADDRFIELDSIZE);
