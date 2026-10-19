@@ -674,7 +674,9 @@ LONG SCSIWifi_getNetwork(SCSIWIFIDevice device, struct SCSIWifi_NetworkEntry* co
 LONG SCSIWifi_addMulticastAddress(SCSIWIFIDevice device, struct SCSIWifi_MACAddress* macAddress) {
     LSCSIDevice dev = (LSCSIDevice)device;
 
-    SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_ADDMULTICAST, 0, 0, 6, 0, 0);
+    // The transfer length is CDB bytes 3-4, big-endian: the firmware reads
+    // (cdb[3] << 8) + cdb[4], so the 6 belongs in byte 4.
+    SCSI_PREPCMD(dev, SCSI_NETWORK_WIFI_ADDMULTICAST, 0, 0, 0, 6, 0);
     memcpy(&dev->scsiCommand[6], macAddress->address, 6);     
 
     dev->Cmd.scsi_Data = (APTR)&dev->scsiCommand[6];       
